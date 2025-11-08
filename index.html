@@ -477,8 +477,14 @@
             transition: background 0.2s;
         }
 
-        .next-btn:hover {
+        .next-btn:hover:not(:disabled) {
             background: #3a7bc8;
+        }
+
+        .next-btn:disabled {
+            background: #cccccc;
+            cursor: not-allowed;
+            opacity: 0.6;
         }
 
         .loading {
@@ -683,6 +689,7 @@
             let silenceTimeout = null;
             let lastSpeechTime = null;
             const SILENCE_TIMEOUT_MS = 3000; // 3 seconds of silence before auto-stop
+            let regenerateCancelled = false; // Flag to cancel regeneration
 
             // Word list for fallback
             let wordList = [
@@ -1345,9 +1352,15 @@
                     return;
                 }
 
+                // Reset cancellation flag
+                regenerateCancelled = false;
+
                 // Show loading state immediately
                 regenerateBtn.classList.add('loading');
                 regenerateBtn.disabled = true;
+                
+                // Disable Next Word button during regeneration
+                nextBtn.disabled = true;
 
                 // Create skeleton loader first
                 const skeletonLoader = createSkeletonLoader();
@@ -1365,10 +1378,20 @@
                 void exampleEl.offsetWidth;
                 
                 // CRITICAL: Use double requestAnimationFrame to ensure browser paints skeleton
-                // This gives the browser TWO frames to render before starting async work
+                // But check for cancellation during this wait
                 await new Promise(resolve => {
                     requestAnimationFrame(() => {
+                        // Check if cancelled during first frame
+                        if (regenerateCancelled) {
+                            resolve();
+                            return;
+                        }
                         requestAnimationFrame(() => {
+                            // Check if cancelled during second frame
+                            if (regenerateCancelled) {
+                                resolve();
+                                return;
+                            }
                             // One more microtask to ensure rendering
                             Promise.resolve().then(() => {
                                 resolve();
@@ -1377,11 +1400,17 @@
                     });
                 });
 
+                // Check if cancelled before starting async work
+                if (regenerateCancelled) {
+                    cleanupRegeneration(skeletonLoader);
+                    return;
+                }
+
                 try {
                     let newExample = null;
 
                     // Try to generate using LLM if available
-                    if (llmReady && !llmLoading && currentWord.definition) {
+                    if (llmReady && !llmLoading && currentWord.definition && !regenerateCancelled) {
                         try {
                             newExample = await generateExampleSentence(currentWord.word, currentWord.definition);
                         } catch (error) {
@@ -1389,8 +1418,14 @@
                         }
                     }
 
+                    // Check if cancelled after LLM generation
+                    if (regenerateCancelled) {
+                        cleanupRegeneration(skeletonLoader);
+                        return;
+                    }
+
                     // If LLM didn't generate or isn't available, try fetching from API again
-                    if (!newExample) {
+                    if (!newExample && !regenerateCancelled) {
                         const apiData = await fetchWordData(currentWord.word);
                         if (apiData && apiData.meanings && apiData.meanings.length > 0) {
                             const firstMeaning = apiData.meanings[0];
@@ -1415,6 +1450,12 @@
                         }
                     }
 
+                    // Check if cancelled after API fetch
+                    if (regenerateCancelled) {
+                        cleanupRegeneration(skeletonLoader);
+                        return;
+                    }
+
                     // Hide skeleton loader and show new text directly (no morphing)
                     skeletonLoader.classList.remove('active');
                     skeletonLoader.style.display = 'none';
@@ -1422,39 +1463,65 @@
                     exampleEl.style.opacity = '1';
 
                     // Update the example directly without animation
-                    if (newExample) {
+                    if (newExample && !regenerateCancelled) {
                         currentWord.example = newExample;
                         exampleEl.textContent = `"${newExample}"`;
                         // Update practice text as well
                         practiceTextEl.textContent = `"${newExample}"`;
-                    } else {
+                    } else if (!regenerateCancelled) {
                         // Fallback message
                         const fallbackText = `"Try using "${currentWord.word}" in your own sentence!"`;
                         exampleEl.textContent = fallbackText;
                     }
                 } catch (error) {
-                    console.error('Error regenerating example:', error);
-                    // Hide skeleton loader on error
+                    if (!regenerateCancelled) {
+                        console.error('Error regenerating example:', error);
+                        // Hide skeleton loader on error
+                        skeletonLoader.classList.remove('active');
+                        skeletonLoader.style.display = 'none';
+                        skeletonLoader.style.opacity = '0';
+                        exampleEl.style.opacity = '1';
+                        const errorText = `"${currentWord.example || `This is an example sentence for ${currentWord.word}.`}"`;
+                        exampleEl.textContent = errorText;
+                    }
+                } finally {
+                    if (!regenerateCancelled) {
+                        // Ensure skeleton loader is always hidden
+                        const loader = document.getElementById('skeleton-loader');
+                        if (loader) {
+                            loader.classList.remove('active');
+                            loader.style.display = 'none';
+                            loader.style.opacity = '0';
+                        }
+                        // Remove loading state
+                        regenerateBtn.classList.remove('loading');
+                        regenerateBtn.disabled = false;
+                        // Re-enable Next Word button
+                        nextBtn.disabled = false;
+                        // Reset example opacity
+                        exampleEl.style.opacity = '1';
+                    }
+                }
+            }
+
+            // Cleanup function for regeneration
+            function cleanupRegeneration(skeletonLoader) {
+                if (skeletonLoader) {
                     skeletonLoader.classList.remove('active');
                     skeletonLoader.style.display = 'none';
                     skeletonLoader.style.opacity = '0';
-                    exampleEl.style.opacity = '1';
-                    const errorText = `"${currentWord.example || `This is an example sentence for ${currentWord.word}.`}"`;
-                    exampleEl.textContent = errorText;
-                } finally {
-                    // Ensure skeleton loader is always hidden
-                    const loader = document.getElementById('skeleton-loader');
-                    if (loader) {
-                        loader.classList.remove('active');
-                        loader.style.display = 'none';
-                        loader.style.opacity = '0';
-                    }
-                    // Remove loading state
-                    regenerateBtn.classList.remove('loading');
-                    regenerateBtn.disabled = false;
-                    // Reset example opacity
-                    exampleEl.style.opacity = '1';
                 }
+                const loader = document.getElementById('skeleton-loader');
+                if (loader) {
+                    loader.classList.remove('active');
+                    loader.style.display = 'none';
+                    loader.style.opacity = '0';
+                }
+                regenerateBtn.classList.remove('loading');
+                regenerateBtn.disabled = false;
+                // Re-enable Next Word button
+                nextBtn.disabled = false;
+                exampleEl.style.opacity = '1';
             }
 
             // Display word
@@ -1534,7 +1601,10 @@
 
             // Load a new word
             async function loadNewWord() {
-                // Clean up any active skeleton loader
+                // IMMEDIATELY cancel any ongoing regeneration - don't wait for anything
+                regenerateCancelled = true;
+                
+                // Clean up any active skeleton loader IMMEDIATELY (synchronously)
                 const skeletonLoader = document.getElementById('skeleton-loader');
                 if (skeletonLoader) {
                     skeletonLoader.classList.remove('active');
@@ -1542,59 +1612,65 @@
                     skeletonLoader.style.opacity = '0';
                 }
                 
-                // Reset example element opacity
+                // Reset example element opacity IMMEDIATELY
                 exampleEl.style.opacity = '1';
                 
-                // Reset regenerate button state
+                // Reset regenerate button state IMMEDIATELY
                 regenerateBtn.classList.remove('loading');
                 regenerateBtn.disabled = false;
                 
-                // Fade out word container if it's visible
-                if (!wordContainerEl.classList.contains('hidden')) {
-                    fadeOut(wordContainerEl, () => {
-                        // After fade out, show loading
-                        fadeIn(loadingEl);
-                    });
-                } else {
-                    // If word container is already hidden, just show loading
-                    fadeIn(loadingEl);
-                }
-                
+                // IMMEDIATELY hide word container and show loading screen (no waiting)
+                // Don't wait for fade animations - show loading immediately
+                wordContainerEl.classList.add('hidden');
+                wordContainerEl.classList.remove('show');
                 errorEl.classList.add('hidden');
+                
+                // Show loading screen IMMEDIATELY
+                loadingEl.classList.remove('hidden');
+                loadingEl.classList.add('show');
+                
+                // Force immediate rendering - trigger reflow
+                void loadingEl.offsetWidth;
+                void wordContainerEl.offsetWidth;
+                
+                // Start async work in next tick - don't block UI updates
+                // Use setTimeout to ensure UI is painted first
+                setTimeout(async () => {
 
-                const randomWord = getRandomWord();
+                    const randomWord = getRandomWord();
 
-                try {
-                    const apiData = await fetchWordData(randomWord);
-                    if (apiData) {
-                        const formattedData = await formatWordData(apiData);
-                        if (formattedData) {
-                            displayWord(formattedData);
-                            // Fade out loading, then fade in word container
-                            fadeOut(loadingEl, () => {
-                                fadeIn(wordContainerEl);
-                            });
+                    try {
+                        const apiData = await fetchWordData(randomWord);
+                        if (apiData) {
+                            const formattedData = await formatWordData(apiData);
+                            if (formattedData) {
+                                displayWord(formattedData);
+                                // Fade out loading, then fade in word container
+                                fadeOut(loadingEl, () => {
+                                    fadeIn(wordContainerEl);
+                                });
+                            } else {
+                                throw new Error('Could not format word data');
+                            }
                         } else {
-                            throw new Error('Could not format word data');
+                            throw new Error('No data received from API');
                         }
-                    } else {
-                        throw new Error('No data received from API');
+                    } catch (error) {
+                        console.error('Error loading word:', error);
+                        // Use fallback word data
+                        const fallbackWord = {
+                            word: randomWord,
+                            pronunciation: '/pronunciation/',
+                            definition: `The meaning of ${randomWord}.`,
+                            example: `This is an example sentence using the word ${randomWord}.`
+                        };
+                        displayWord(fallbackWord);
+                        // Fade out loading, then fade in word container
+                        fadeOut(loadingEl, () => {
+                            fadeIn(wordContainerEl);
+                        });
                     }
-                } catch (error) {
-                    console.error('Error loading word:', error);
-                    // Use fallback word data
-                    const fallbackWord = {
-                        word: randomWord,
-                        pronunciation: '/pronunciation/',
-                        definition: `The meaning of ${randomWord}.`,
-                        example: `This is an example sentence using the word ${randomWord}.`
-                    };
-                    displayWord(fallbackWord);
-                    // Fade out loading, then fade in word container
-                    fadeOut(loadingEl, () => {
-                        fadeIn(wordContainerEl);
-                    });
-                }
+                }, 0);
             }
 
             // Practice mode switching
