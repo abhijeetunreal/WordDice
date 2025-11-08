@@ -85,8 +85,15 @@
             transition: transform 0.2s;
         }
 
-        .audio-btn:hover {
+        .audio-btn:hover:not(:disabled) {
             transform: scale(1.05);
+        }
+
+        .audio-btn:disabled {
+            background: #cccccc;
+            cursor: not-allowed;
+            opacity: 0.6;
+            box-shadow: none;
         }
 
         .audio-btn svg {
@@ -1361,6 +1368,9 @@
                 
                 // Disable Next Word button during regeneration
                 nextBtn.disabled = true;
+                
+                // Disable audio/pronunciation button during regeneration
+                audioBtn.disabled = true;
 
                 // Create skeleton loader first
                 const skeletonLoader = createSkeletonLoader();
@@ -1498,6 +1508,8 @@
                         regenerateBtn.disabled = false;
                         // Re-enable Next Word button
                         nextBtn.disabled = false;
+                        // Re-enable audio button
+                        audioBtn.disabled = false;
                         // Reset example opacity
                         exampleEl.style.opacity = '1';
                     }
@@ -1521,6 +1533,8 @@
                 regenerateBtn.disabled = false;
                 // Re-enable Next Word button
                 nextBtn.disabled = false;
+                // Re-enable audio button
+                audioBtn.disabled = false;
                 exampleEl.style.opacity = '1';
             }
 
