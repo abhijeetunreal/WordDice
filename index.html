@@ -1417,6 +1417,8 @@
 
                     // Hide skeleton loader and show new text directly (no morphing)
                     skeletonLoader.classList.remove('active');
+                    skeletonLoader.style.display = 'none';
+                    skeletonLoader.style.opacity = '0';
                     exampleEl.style.opacity = '1';
 
                     // Update the example directly without animation
@@ -1434,13 +1436,24 @@
                     console.error('Error regenerating example:', error);
                     // Hide skeleton loader on error
                     skeletonLoader.classList.remove('active');
+                    skeletonLoader.style.display = 'none';
+                    skeletonLoader.style.opacity = '0';
                     exampleEl.style.opacity = '1';
                     const errorText = `"${currentWord.example || `This is an example sentence for ${currentWord.word}.`}"`;
                     exampleEl.textContent = errorText;
                 } finally {
+                    // Ensure skeleton loader is always hidden
+                    const loader = document.getElementById('skeleton-loader');
+                    if (loader) {
+                        loader.classList.remove('active');
+                        loader.style.display = 'none';
+                        loader.style.opacity = '0';
+                    }
                     // Remove loading state
                     regenerateBtn.classList.remove('loading');
                     regenerateBtn.disabled = false;
+                    // Reset example opacity
+                    exampleEl.style.opacity = '1';
                 }
             }
 
@@ -1521,6 +1534,21 @@
 
             // Load a new word
             async function loadNewWord() {
+                // Clean up any active skeleton loader
+                const skeletonLoader = document.getElementById('skeleton-loader');
+                if (skeletonLoader) {
+                    skeletonLoader.classList.remove('active');
+                    skeletonLoader.style.display = 'none';
+                    skeletonLoader.style.opacity = '0';
+                }
+                
+                // Reset example element opacity
+                exampleEl.style.opacity = '1';
+                
+                // Reset regenerate button state
+                regenerateBtn.classList.remove('loading');
+                regenerateBtn.disabled = false;
+                
                 // Fade out word container if it's visible
                 if (!wordContainerEl.classList.contains('hidden')) {
                     fadeOut(wordContainerEl, () => {
