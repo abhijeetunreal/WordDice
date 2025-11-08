@@ -120,6 +120,152 @@
             padding: 15px;
             margin: 15px 0;
             border-radius: 0 8px 8px 0;
+            position: relative;
+        }
+
+        .example-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 10px;
+        }
+
+        .regenerate-btn {
+            background: #4A90E2;
+            border: none;
+            border-radius: 50%;
+            width: 32px;
+            height: 32px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            padding: 0;
+            flex-shrink: 0;
+        }
+
+        .regenerate-btn:hover {
+            background: #3a7bc8;
+            transform: rotate(90deg);
+        }
+
+        .regenerate-btn:active {
+            transform: rotate(180deg) scale(0.95);
+        }
+
+        .regenerate-btn.loading {
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            from {
+                transform: rotate(0deg);
+            }
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .regenerate-btn svg {
+            width: 18px;
+            height: 18px;
+            fill: white;
+        }
+
+        .example p {
+            margin: 0;
+            position: relative;
+        }
+
+        .example-text-container {
+            position: relative;
+            display: inline-block;
+            width: 100%;
+        }
+
+        .skeleton-loader {
+            display: none !important;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 10;
+            opacity: 0;
+            transition: opacity 0.1s ease;
+        }
+
+        .skeleton-loader.active {
+            display: block !important;
+            opacity: 1 !important;
+        }
+
+        .skeleton-line {
+            height: 1.2em;
+            background: linear-gradient(90deg, 
+                #e0e0e0 25%, 
+                #f0f0f0 50%, 
+                #e0e0e0 75%);
+            background-size: 200% 100%;
+            border-radius: 4px;
+            margin-bottom: 0.5em;
+            animation: skeleton-shimmer 1.5s ease-in-out infinite;
+        }
+
+        .skeleton-line:last-child {
+            margin-bottom: 0;
+        }
+
+        .skeleton-line.short {
+            width: 60%;
+        }
+
+        .skeleton-line.medium {
+            width: 80%;
+        }
+
+        .skeleton-line.long {
+            width: 100%;
+        }
+
+        @keyframes skeleton-shimmer {
+            0% {
+                background-position: -200% 0;
+            }
+            100% {
+                background-position: 200% 0;
+            }
+        }
+
+        .char-morph {
+            display: inline-block;
+            transition: opacity 0.3s ease, transform 0.3s ease;
+        }
+
+        .char-morph.morphing {
+            opacity: 0.3;
+            transform: scale(0.8);
+        }
+
+        .char-morph.morphing-in {
+            animation: charMorphIn 0.4s ease forwards;
+        }
+
+        @keyframes charMorphIn {
+            0% {
+                opacity: 0;
+                transform: scale(0.5) translateY(-5px);
+            }
+            50% {
+                opacity: 0.7;
+                transform: scale(1.1) translateY(0);
+            }
+            100% {
+                opacity: 1;
+                transform: scale(1) translateY(0);
+            }
         }
 
         .practice-section {
@@ -429,8 +575,15 @@
                     </p>
 
                     <div class="example">
-                        <p id="example">"A fortunate stroke of serendipity led them to discover the beautiful hidden
-                            beach."</p>
+                        <div class="example-header">
+                            <p id="example" style="flex: 1; margin: 0;">"A fortunate stroke of serendipity led them to discover the beautiful hidden
+                                beach."</p>
+                            <button class="regenerate-btn" id="regenerate-btn" title="Generate new example sentence">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                                    <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
+                                </svg>
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -504,6 +657,7 @@
             const pronunciationEl = document.getElementById('pronunciation');
             const definitionEl = document.getElementById('definition');
             const exampleEl = document.getElementById('example');
+            const regenerateBtn = document.getElementById('regenerate-btn');
             const audioBtn = document.getElementById('audio-btn');
             const nextBtn = document.getElementById('next-btn');
             const repeatBtn = document.getElementById('repeat-btn');
@@ -548,15 +702,15 @@
             let llmLoading = false;
             let llmReady = false;
 
-            // Initialize local LLM
+            // Initialize local LLM (non-blocking, runs in background)
             async function initializeLLM() {
                 if (llmLoading || llmReady) return;
                 
                 try {
                     llmLoading = true;
-                    console.log('Loading local LLM for sentence generation...');
+                    console.log('Loading local LLM for sentence generation (non-blocking)...');
                     
-                    // Wait for transformers pipeline to be available
+                    // Wait for transformers pipeline to be available (with timeout)
                     if (typeof window.transformersPipeline === 'undefined') {
                         await new Promise(resolve => {
                             const checkTransformers = setInterval(() => {
@@ -565,11 +719,11 @@
                                     resolve();
                                 }
                             }, 100);
-                            // Timeout after 10 seconds
+                            // Timeout after 5 seconds - don't wait too long
                             setTimeout(() => {
                                 clearInterval(checkTransformers);
                                 resolve();
-                            }, 10000);
+                            }, 5000);
                         });
                     }
                     
@@ -591,6 +745,7 @@
                 } catch (error) {
                     console.error('Error loading LLM:', error);
                     llmLoading = false;
+                    llmReady = false; // Explicitly mark as not ready
                     // Continue without LLM, will use API examples
                 }
             }
@@ -602,16 +757,16 @@
                 }
 
                 try {
-                    // Create a better prompt for sentence generation
-                    const prompt = `The word "${word}" means: ${definition}. Example sentence using "${word}":`;
+                    // Create a conversational prompt that guides the LLM to generate natural sentences
+                    const prompt = `Write a natural, conversational sentence using the word "${word}" which means "${definition}". Make it sound like everyday speech:`;
                     
                     const output = await llmPipeline(prompt, {
-                        max_new_tokens: 40,
-                        temperature: 0.8,
+                        max_new_tokens: 50,
+                        temperature: 0.7,
                         do_sample: true,
-                        top_k: 50,
-                        top_p: 0.9,
-                        repetition_penalty: 1.3,
+                        top_k: 40,
+                        top_p: 0.85,
+                        repetition_penalty: 1.4,
                         pad_token_id: 50256,
                     });
 
@@ -628,15 +783,31 @@
                         sentence = sentence.split(/[.!?]/)[0]; // Take first complete sentence
                         sentence = sentence.trim();
                         
+                        // Filter out weird or nonsensical sentences
+                        // Check for minimum length and ensure it's a real sentence
+                        if (sentence.length < 10 || sentence.length > 200) {
+                            return null; // Too short or too long, skip
+                        }
+                        
+                        // Check for repetitive patterns (e.g., "word word word")
+                        const words = sentence.split(/\s+/);
+                        if (words.length < 3) {
+                            return null; // Too few words, not a proper sentence
+                        }
+                        
+                        // Check for too many repeated words (indicates weird generation)
+                        const wordCounts = {};
+                        for (let w of words) {
+                            const lower = w.toLowerCase();
+                            wordCounts[lower] = (wordCounts[lower] || 0) + 1;
+                            if (wordCounts[lower] > 3) {
+                                return null; // Too repetitive, skip
+                            }
+                        }
+                        
                         // Ensure the word is in the sentence
                         if (!sentence.toLowerCase().includes(word.toLowerCase())) {
-                            // Try to incorporate the word naturally
-                            const words = sentence.split(' ');
-                            if (words.length > 0) {
-                                sentence = `${sentence} The word "${word}" fits perfectly here.`;
-                            } else {
-                                sentence = `This is an example sentence using the word "${word}".`;
-                            }
+                            return null; // Word not found, skip this generation
                         }
                         
                         // Capitalize first letter
@@ -654,14 +825,19 @@
                     const sentences = generatedText.split(/[.!?]/);
                     for (let sent of sentences) {
                         sent = sent.trim();
-                        if (sent.length > 15 && sent.toLowerCase().includes(word.toLowerCase())) {
-                            sent = sent.replace(/^["']|["']$/g, '').trim();
-                            if (sent.length > 0) {
-                                sent = sent.charAt(0).toUpperCase() + sent.slice(1);
-                                if (!sent.match(/[.!?]$/)) {
-                                    sent += '.';
+                        // Better validation: check for reasonable length and word count
+                        if (sent.length >= 15 && sent.length <= 200 && 
+                            sent.toLowerCase().includes(word.toLowerCase())) {
+                            const words = sent.split(/\s+/);
+                            if (words.length >= 3) {
+                                sent = sent.replace(/^["']|["']$/g, '').trim();
+                                if (sent.length > 0) {
+                                    sent = sent.charAt(0).toUpperCase() + sent.slice(1);
+                                    if (!sent.match(/[.!?]$/)) {
+                                        sent += '.';
+                                    }
+                                    return sent;
                                 }
-                                return sent;
                             }
                         }
                     }
@@ -1019,13 +1195,21 @@
                     }
                 }
 
-                // Generate example sentence using local LLM if available
-                if (llmReady && definition) {
-                    const generatedExample = await generateExampleSentence(word, definition);
-                    if (generatedExample) {
-                        example = generatedExample;
+                // Generate example sentence using local LLM if fully loaded and ready
+                // Only use LLM if it's completely ready, otherwise use default API example
+                if (llmReady && !llmLoading && definition) {
+                    try {
+                        const generatedExample = await generateExampleSentence(word, definition);
+                        if (generatedExample) {
+                            example = generatedExample;
+                        }
+                        // If generation fails or returns null, keep the API example
+                    } catch (error) {
+                        console.log('LLM generation failed, using API example:', error);
+                        // Keep the API example if LLM fails
                     }
                 }
+                // If LLM is not ready or still loading, use the API example (already set above)
 
                 return {
                     word: word,
@@ -1033,6 +1217,230 @@
                     definition: definition,
                     example: example
                 };
+            }
+
+            // Create skeleton loader element
+            function createSkeletonLoader() {
+                let loader = document.getElementById('skeleton-loader');
+                if (!loader) {
+                    loader = document.createElement('div');
+                    loader.id = 'skeleton-loader';
+                    loader.className = 'skeleton-loader';
+                    const container = exampleEl.parentElement;
+                    if (container) {
+                        container.style.position = 'relative';
+                        // Create skeleton lines
+                        loader.innerHTML = `
+                            <div class="skeleton-line long"></div>
+                            <div class="skeleton-line medium"></div>
+                            <div class="skeleton-line short"></div>
+                        `;
+                        container.appendChild(loader);
+                    }
+                }
+                return loader;
+            }
+
+            // Animate character morphing
+            async function morphSentence(oldText, newText) {
+                return new Promise((resolve) => {
+                    // Remove quotes for processing
+                    const oldClean = oldText.replace(/^["']|["']$/g, '').trim();
+                    const newClean = newText.replace(/^["']|["']$/g, '').trim();
+                    
+                    // Split into characters
+                    const oldChars = oldClean.split('');
+                    const newChars = newClean.split('');
+                    const maxLength = Math.max(oldChars.length, newChars.length);
+                    
+                    // Create initial HTML with old characters
+                    let html = '"';
+                    for (let i = 0; i < maxLength; i++) {
+                        const char = i < oldChars.length ? oldChars[i] : (i < newChars.length ? newChars[i] : ' ');
+                        const displayChar = char === ' ' ? '\u00A0' : char;
+                        html += `<span class="char-morph" data-index="${i}" data-old="${oldChars[i] || ''}" data-new="${newChars[i] || ''}">${displayChar}</span>`;
+                    }
+                    html += '"';
+                    exampleEl.innerHTML = html;
+
+                    // Morph characters one by one with smooth animation
+                    const charDelay = 25; // milliseconds between each character
+                    let completed = 0;
+                    let resolved = false;
+                    const totalChars = maxLength;
+
+                    function checkComplete() {
+                        completed++;
+                        if (completed >= totalChars && !resolved) {
+                            resolved = true;
+                            resolve();
+                        }
+                    }
+
+                    function processChar(index) {
+                        const span = exampleEl.querySelector(`[data-index="${index}"]`);
+                        if (!span) {
+                            checkComplete();
+                            return;
+                        }
+
+                        const oldChar = span.getAttribute('data-old');
+                        const newChar = span.getAttribute('data-new');
+
+                        if (index < oldChars.length && index < newChars.length) {
+                            // Both old and new exist at this position
+                            if (oldChar !== newChar) {
+                                // Morph: fade out old, fade in new
+                                span.classList.add('morphing');
+                                setTimeout(() => {
+                                    span.textContent = newChar === ' ' ? '\u00A0' : newChar;
+                                    span.classList.remove('morphing');
+                                    span.classList.add('morphing-in');
+                                    setTimeout(() => {
+                                        span.classList.remove('morphing-in');
+                                        checkComplete();
+                                    }, 400);
+                                }, 200);
+                            } else {
+                                // Same character, no change needed
+                                checkComplete();
+                            }
+                        } else if (index < oldChars.length && index >= newChars.length) {
+                            // Old character exists but new doesn't - fade out
+                            span.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+                            span.style.opacity = '0';
+                            span.style.transform = 'scale(0.5)';
+                            setTimeout(() => {
+                                span.remove();
+                                checkComplete();
+                            }, 300);
+                        } else if (index >= oldChars.length && index < newChars.length) {
+                            // New character exists but old doesn't - fade in
+                            span.textContent = newChar === ' ' ? '\u00A0' : newChar;
+                            span.style.opacity = '0';
+                            span.style.transform = 'scale(0.5) translateY(-5px)';
+                            setTimeout(() => {
+                                span.classList.add('morphing-in');
+                                setTimeout(() => {
+                                    span.classList.remove('morphing-in');
+                                    checkComplete();
+                                }, 400);
+                            }, 50);
+                        } else {
+                            checkComplete();
+                        }
+                    }
+
+                    // Process all characters with delay
+                    for (let i = 0; i < maxLength; i++) {
+                        setTimeout(() => processChar(i), i * charDelay);
+                    }
+                });
+            }
+
+            // Regenerate example sentence with skeleton loader
+            async function regenerateExample() {
+                if (!currentWord || !currentWord.definition) {
+                    return;
+                }
+
+                // Show loading state immediately
+                regenerateBtn.classList.add('loading');
+                regenerateBtn.disabled = true;
+
+                // Create skeleton loader first
+                const skeletonLoader = createSkeletonLoader();
+                
+                // Hide the current text immediately
+                exampleEl.style.opacity = '0.3';
+                
+                // Show skeleton loader IMMEDIATELY - synchronously, no await
+                skeletonLoader.style.display = 'block';
+                skeletonLoader.style.opacity = '1';
+                skeletonLoader.classList.add('active');
+                
+                // Force immediate DOM update by accessing offsetWidth (triggers reflow)
+                void skeletonLoader.offsetWidth;
+                void exampleEl.offsetWidth;
+                
+                // CRITICAL: Use double requestAnimationFrame to ensure browser paints skeleton
+                // This gives the browser TWO frames to render before starting async work
+                await new Promise(resolve => {
+                    requestAnimationFrame(() => {
+                        requestAnimationFrame(() => {
+                            // One more microtask to ensure rendering
+                            Promise.resolve().then(() => {
+                                resolve();
+                            });
+                        });
+                    });
+                });
+
+                try {
+                    let newExample = null;
+
+                    // Try to generate using LLM if available
+                    if (llmReady && !llmLoading && currentWord.definition) {
+                        try {
+                            newExample = await generateExampleSentence(currentWord.word, currentWord.definition);
+                        } catch (error) {
+                            console.log('LLM generation failed:', error);
+                        }
+                    }
+
+                    // If LLM didn't generate or isn't available, try fetching from API again
+                    if (!newExample) {
+                        const apiData = await fetchWordData(currentWord.word);
+                        if (apiData && apiData.meanings && apiData.meanings.length > 0) {
+                            const firstMeaning = apiData.meanings[0];
+                            if (firstMeaning.definitions && firstMeaning.definitions.length > 0) {
+                                // Try to get a different example from other definitions
+                                for (let meaning of apiData.meanings) {
+                                    if (meaning.definitions) {
+                                        for (let def of meaning.definitions) {
+                                            if (def.example && def.example !== currentWord.example) {
+                                                newExample = def.example;
+                                                break;
+                                            }
+                                        }
+                                        if (newExample) break;
+                                    }
+                                }
+                                // If no different example found, use the first one
+                                if (!newExample && firstMeaning.definitions[0].example) {
+                                    newExample = firstMeaning.definitions[0].example;
+                                }
+                            }
+                        }
+                    }
+
+                    // Hide skeleton loader and show new text directly (no morphing)
+                    skeletonLoader.classList.remove('active');
+                    exampleEl.style.opacity = '1';
+
+                    // Update the example directly without animation
+                    if (newExample) {
+                        currentWord.example = newExample;
+                        exampleEl.textContent = `"${newExample}"`;
+                        // Update practice text as well
+                        practiceTextEl.textContent = `"${newExample}"`;
+                    } else {
+                        // Fallback message
+                        const fallbackText = `"Try using "${currentWord.word}" in your own sentence!"`;
+                        exampleEl.textContent = fallbackText;
+                    }
+                } catch (error) {
+                    console.error('Error regenerating example:', error);
+                    // Hide skeleton loader on error
+                    skeletonLoader.classList.remove('active');
+                    exampleEl.style.opacity = '1';
+                    const errorText = `"${currentWord.example || `This is an example sentence for ${currentWord.word}.`}"`;
+                    exampleEl.textContent = errorText;
+                } finally {
+                    // Remove loading state
+                    regenerateBtn.classList.remove('loading');
+                    regenerateBtn.disabled = false;
+                }
             }
 
             // Display word
@@ -1300,6 +1708,11 @@
                     }
                 }
             }
+
+            // Regenerate button - generate new example sentence
+            regenerateBtn.addEventListener('click', function () {
+                regenerateExample();
+            });
 
             // Next button - load a new word
             nextBtn.addEventListener('click', function () {
