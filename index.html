@@ -338,6 +338,17 @@
             text-align: center;
             padding: 40px;
             color: #666;
+            opacity: 0;
+            transition: opacity 0.4s ease-in-out;
+        }
+
+        .loading.show {
+            opacity: 1;
+        }
+
+        .loading img {
+            max-width: 200px;
+            margin-bottom: 20px;
         }
 
         .error {
@@ -361,6 +372,15 @@
             display: none;
         }
 
+        #word-container {
+            opacity: 0;
+            transition: opacity 0.5s ease-in-out;
+        }
+
+        #word-container.show {
+            opacity: 1;
+        }
+
         @media (max-width: 500px) {
             .word {
                 font-size: 36px;
@@ -380,7 +400,8 @@
             <div class="date" id="current-date">Loading...</div>
         </div>
 
-        <div id="loading" class="loading">
+        <div id="loading" class="loading show">
+            <img src="https://media.tenor.com/sUiwSBs8S6QAAAAj/dice-game.gif" alt="Loading animation">
             <p>Loading today's word...</p>
         </div>
     
@@ -1069,10 +1090,35 @@
                 }
             }
 
+            // Fade transition helper functions
+            function fadeOut(element, callback) {
+                element.classList.remove('show');
+                setTimeout(() => {
+                    element.classList.add('hidden');
+                    if (callback) callback();
+                }, 500); // Match transition duration
+            }
+
+            function fadeIn(element) {
+                element.classList.remove('hidden');
+                // Force reflow to ensure transition works
+                void element.offsetWidth;
+                element.classList.add('show');
+            }
+
             // Load a new word
             async function loadNewWord() {
-                loadingEl.classList.remove('hidden');
-                wordContainerEl.classList.add('hidden');
+                // Fade out word container if it's visible
+                if (!wordContainerEl.classList.contains('hidden')) {
+                    fadeOut(wordContainerEl, () => {
+                        // After fade out, show loading
+                        fadeIn(loadingEl);
+                    });
+                } else {
+                    // If word container is already hidden, just show loading
+                    fadeIn(loadingEl);
+                }
+                
                 errorEl.classList.add('hidden');
 
                 const randomWord = getRandomWord();
@@ -1083,8 +1129,10 @@
                         const formattedData = await formatWordData(apiData);
                         if (formattedData) {
                             displayWord(formattedData);
-                            wordContainerEl.classList.remove('hidden');
-                            loadingEl.classList.add('hidden');
+                            // Fade out loading, then fade in word container
+                            fadeOut(loadingEl, () => {
+                                fadeIn(wordContainerEl);
+                            });
                         } else {
                             throw new Error('Could not format word data');
                         }
@@ -1101,8 +1149,10 @@
                         example: `This is an example sentence using the word ${randomWord}.`
                     };
                     displayWord(fallbackWord);
-                    wordContainerEl.classList.remove('hidden');
-                    loadingEl.classList.add('hidden');
+                    // Fade out loading, then fade in word container
+                    fadeOut(loadingEl, () => {
+                        fadeIn(wordContainerEl);
+                    });
                 }
             }
 
